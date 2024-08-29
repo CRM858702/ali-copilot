@@ -1,0 +1,64 @@
+name: Release Power Platform Solution
+
+on:
+  workflow_run:
+    workflows: ["Export Power Platform Solution"]
+    types:
+      - completed
+
+jobs:
+  deploy-to-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Deploy to Test
+      run: |
+        az login --service-principal -u ${{ secrets.CLIENT_ID }} -p ${{ secrets.SECRET_ID }} --tenant ${{ secrets.TENANT_ID }}
+        az powerplatform solution import --name <solution-name> --input-folder ./exported-solution --environment test
+    env:
+      CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      SECRET_ID: ${{ secrets.SECRET_ID }}
+      TENANT_ID: ${{ secrets.TENANT_ID }}
+
+  deploy-to-uat:
+    runs-on: ubuntu-latest
+    needs: deploy-to-test
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Deploy to UAT
+      run: |
+        az login --service-principal -u ${{ secrets.CLIENT_ID }} -p ${{ secrets.SECRET_ID }} --tenant ${{ secrets.TENANT_ID }}
+        az powerplatform solution import --name <solution-name> --input-folder ./exported-solution --environment uat
+    env:
+      CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      SECRET_ID: ${{ secrets.SECRET_ID }}
+      TENANT_ID: ${{ secrets.TENANT_ID }}
+
+  deploy-to-prod:
+    runs-on: ubuntu-latest
+    needs: deploy-to-uat
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Deploy to Prod
+      run: |
+        az login --service-principal -u ${{ secrets.CLIENT_ID }} -p ${{ secrets.SECRET_ID }} --tenant ${{ secrets.TENANT_ID }}
+        az powerplatform solution import --name <solution-name> --input-folder ./exported-solution --environment prod
+    env:
+      CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      SECRET_ID: ${{ secrets.SECRET_ID }}
+      TENANT_ID: ${{ secrets.TENANT_ID }}
+    if: github.event.workflow_run.conclusion == 'success'
+    environment:
+      name: prod
+      url: https://prod-environment-url
+      reviewers:
+        - team: reviewers-team

@@ -1,0 +1,23 @@
+name: Export Power Platform Solution
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  export-solution:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Export Solution
+      run: |
+        az login --service-principal -u ${{ secrets.CLIENT_ID }} -p ${{ secrets.SECRET_ID }} --tenant ${{ secrets.TENANT_ID }}
+        az powerplatform solution export --name <solution-name> --output-folder ./exported-solution
+    env:
+      CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      SECRET_ID: ${{ secrets.SECRET_ID }}
+      TENANT_ID: ${{ secrets.TENANT_ID }}

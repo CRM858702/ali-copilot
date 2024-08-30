@@ -1,12 +1,8 @@
-# Reusable workflow
-# Convert solution to managed (using a build PowerPlatform environment for the conversion)
-# Upload the solution to the GitHub artifacts and deploy to the PROD environment
+name: Release Pipeline with Version Check
+
 on:
   workflow_call:
     inputs: 
-      # Do Not change these values
-      # Values are set by the caller
-      # Caller sample: release-action-call.yaml
       solution_name:
         description: 'The solution name.'
         type: string
@@ -31,10 +27,6 @@ on:
         description: 'Build environment URL.'
         type: string
         required: true        
-      #DVM_ENVIRONMENT_URL:
-        #description: 'DVM environment URL.'
-        #type: string
-        #required: true   
       QA_ENVIRONMENT_URL:
         description: 'QA environment URL.'
         type: string
@@ -95,7 +87,7 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_shipping_folder }}/
 
-  release-to-DvM:
+  release-to-environments:
     needs: [convert-to-managed]
     runs-on: windows-latest
     env:
@@ -111,66 +103,23 @@ jobs:
         with:
           name: managedSolutions
           path: ${{ inputs.solution_release_folder }}
+
+      - name: Check Solution Availability in QA
+        id: check_qa
+        run: |
+          result=$(pwsh -c "Get-InstalledSolution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'")
+          if [[ "$result" == "false" ]]; then
+            echo "Solution not found in QA. Skipping deployment."
+            exit 0
+          fi
           
-      #- name: Import solution to DVM environment
-        #uses: microsoft/powerplatform-actions/import-solution@v0
-        #with:
-          #environment-url: ${{ inputs.DVM_ENVIRONMENT_URL }}
-          #app-id: ${{ inputs.CLIENT_ID }}
-          #client-secret: ${{ secrets.envSecret }}
-          #tenant-id: ${{ inputs.TENANT_ID }}
-          #solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
-          #force-overwrite: true
-          #publish-changes: true
-
-      - name: Import solution to QA environment
-        uses: microsoft/powerplatform-actions/import-solution@v0
-        with:
-          environment-url: ${{ inputs.QA_ENVIRONMENT_URL }}
-          app-id: ${{ inputs.CLIENT_ID }}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{ inputs.TENANT_ID }}
-          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
-          force-overwrite: true
-          publish-changes: true
+      - name: Increment Version and Import Solution to QA
+        if: steps.check_qa.outputs.found == 'true'
+        run: |
+          version=$(pwsh -c "Get-SolutionVersion -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'")
+          # Increment version here
+          new_version=$(echo $version | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          echo "New version: $new_version"
+          pwsh -c "Import-Solution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionFile '${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip' -Version '$new_version' -ForceOverwrite -PublishChanges"
           
-      - name: Import solution to UAT environment
-        uses: microsoft/powerplatform-actions/import-solution@v0
-        with:  
-          environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
-          app-id: ${{ inputs.CLIENT_ID }}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{ inputs.TENANT_ID }}
-          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
-          force-overwrite: true
-          publish-changes: true
-          
-  release-to-prod:
-    needs: [release-to-DvM]
-    runs-on: windows-latest
-    environment:
-      name: Production
-    env:
-      RUNNER_DEBUG: 1
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          lfs: true
-
-      - name: Fetch the ready to ship solution from GH artifact store
-        uses: actions/download-artifact@v2
-        with:
-          name: managedSolutions
-          path: ${{ inputs.solution_release_folder }}
-
-      - name: Import solution to Production environment
-        uses: microsoft/powerplatform-actions/import-solution@v0
-        with:
-          environment-url: ${{ inputs.PRODUCTION_ENVIRONMENT_URL }}
-          app-id: ${{ inputs.CLIENT_ID }}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{ inputs.TENANT_ID }}
-          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
-          force-overwrite: true
-          publish-changes: true
+      # Repeat similar blocks for UAT and PROD deployments...

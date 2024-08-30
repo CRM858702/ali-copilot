@@ -67,7 +67,18 @@ jobs:
           solution-folder: ${{ inputs.solution_source_folder }}${{ inputs.solution_name }}
           solution-file: ${{ inputs.solution_outbound_folder }}${{ inputs.solution_name }}.zip
           solution-type: Unmanaged    
-
+          
+      - name: Import solution as unmanaged to DvM
+        uses: microsoft/powerplatform-actions/import-solution@v0
+        with:
+          environment-url: ${{inputs.DVM_ENVIRONMENT_URL}}
+          app-id: ${{inputs.CLIENT_ID}}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{inputs.TENANT_ID}}
+          solution-file: ${{ inputs.solution_outbound_folder}}/${{ inputs.solution_name }}.zip
+          force-overwrite: true
+          publish-changes: true
+        
       - name: Export solution as managed
         uses: microsoft/powerplatform-actions/export-solution@v0
         with:
@@ -85,7 +96,7 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_shipping_folder }}/
 
-  release-to-DvM:
+  release-to-QA:
     needs: [convert-to-managed]
     runs-on: windows-latest
     env:
@@ -143,7 +154,7 @@ jobs:
           solution-name: ${{ inputs.solution_name }}
 
   release-to-prod:
-    needs: [release-to-DvM]
+    needs: [release-to-QA]
     runs-on: windows-latest
     environment:
       name: Production

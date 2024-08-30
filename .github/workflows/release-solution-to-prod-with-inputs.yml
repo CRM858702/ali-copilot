@@ -106,20 +106,22 @@ jobs:
 
       - name: Check Solution Availability in QA
         id: check_qa
+        shell: pwsh
         run: |
-          result=$(pwsh -c "Get-InstalledSolution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'")
-          if [[ "$result" == "false" ]]; then
-            echo "Solution not found in QA. Skipping deployment."
+          $result = Get-InstalledSolution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'
+          if ($result -eq $false) {
+            Write-Host "Solution not found in QA. Skipping deployment."
             exit 0
-          fi
+          } else {
+            echo "::set-output name=found::true"
+          }
           
       - name: Increment Version and Import Solution to QA
         if: steps.check_qa.outputs.found == 'true'
+        shell: pwsh
         run: |
-          version=$(pwsh -c "Get-SolutionVersion -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'")
+          $version = Get-SolutionVersion -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'
           # Increment version here
-          new_version=$(echo $version | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
-          echo "New version: $new_version"
-          pwsh -c "Import-Solution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionFile '${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip' -Version '$new_version' -ForceOverwrite -PublishChanges"
-          
-      # Repeat similar blocks for UAT and PROD deployments...
+          $new_version = ($version -split '\.') | ForEach-Object { [int]$_ } | ForEach-Object { $_ + 1 -join '.' }
+          Write-Host "New version: $new_version"
+          Import-Solution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionFile '${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip' -Version $new_version -ForceOverwrite -PublishChanges

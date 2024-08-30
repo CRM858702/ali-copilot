@@ -19,9 +19,10 @@ jobs:
       solution_name: ${{ github.event.inputs.solution_name }}
       
       # Update your environment URLs here
-      BUILD_ENVIRONMENT_URL: https://dev-aliii.crm.dynamics.com/  #qa
-      QA_ENVIRONMENT_URL: https://dvm-aliii.crm.dynamics.com/
-      UAT_ENVIRONMENT_URL: https://qa-aliii.crm.dynamics.com/
+      BUILD_ENVIRONMENT_URL: https://dev-aliii.crm.dynamics.com/  
+      DVM_ENVIRONMENT_URL: https://dvm-aliii.crm.dynamics.com/  
+      QA_ENVIRONMENT_URL: https://QA-aliii.crm.dynamics.com/
+      #UAT_ENVIRONMENT_URL: https://qa-aliii.crm.dynamics.com/
       PRODUCTION_ENVIRONMENT_URL: https://prod-aliii.crm.dynamics.com/
       
       CLIENT_ID: c9bfe35c-4011-4cea-a0b0-1d9aeb92158d

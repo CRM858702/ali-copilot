@@ -95,7 +95,7 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_shipping_folder }}/
 
-  release-to-staging:
+  release-to-DvM:
     needs: [convert-to-managed]
     runs-on: windows-latest
     env:
@@ -146,7 +146,7 @@ jobs:
           publish-changes: true
           
   release-to-prod:
-    needs: [release-to-staging]
+    needs: [release-to-DvM]
     runs-on: windows-latest
     environment:
       name: Production

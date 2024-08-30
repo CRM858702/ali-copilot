@@ -1,5 +1,3 @@
-name: Release Pipeline with Version Check
-
 on:
   workflow_call:
     inputs: 
@@ -53,15 +51,46 @@ on:
         required: true
 
 jobs:
-  convert-to-managed:
+  check-and-increment-version:
     runs-on: windows-latest
     env:
       RUNNER_DEBUG: 1
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          lfs: true
+
+      - name: Install Power Platform CLI
+        run: npm install -g @microsoft/powerplatform-cli
+
+      - name: Authenticate with Power Platform
+        run: |
+          pac auth create --url ${{ inputs.BUILD_ENVIRONMENT_URL }} --client-id ${{ inputs.CLIENT_ID }} --client-secret ${{ secrets.envSecret }} --tenant ${{ inputs.TENANT_ID }}
+
+      - name: Check if solution exists and get current version
+        id: check_solution
+        run: |
+          $solutionList = pac solution list --environment ${{ inputs.BUILD_ENVIRONMENT_URL }}
+          $solution = $solutionList | ConvertFrom-Json | Where-Object { $_.uniqueName -eq '${{ inputs.solution_name }}' }
+          if ($null -eq $solution) {
+            Write-Output "Solution not found."
+            echo "version=1.0.0.0" >> $GITHUB_ENV
+          } else {
+            Write-Output "Solution found: $($solution.version)"
+            # Increment the minor version by 1
+            $versionParts = $solution.version -split '\.'
+            $versionParts[1] = [int]$versionParts[1] + 1
+            $newVersion = "$($versionParts[0]).$($versionParts[1]).$($versionParts[2]).$($versionParts[3])"
+            echo "version=$newVersion" >> $GITHUB_ENV
+          }
+
+  convert-to-managed:
+    needs: [check-and-increment-version]
+    runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+      - uses: actions/checkout@v2
 
       - name: Pack solution
         uses: microsoft/powerplatform-actions/pack-solution@v0
@@ -95,8 +124,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          lfs: true
 
       - name: Fetch the ready to ship solution from GH artifact store
         uses: actions/download-artifact@v2
@@ -104,24 +131,52 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_release_folder }}
 
-      - name: Check Solution Availability in QA
-        id: check_qa
-        shell: pwsh
-        run: |
-          $result = Get-InstalledSolution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'
-          if ($result -eq $false) {
-            Write-Host "Solution not found in QA. Skipping deployment."
-            exit 0
-          } else {
-            echo "::set-output name=found::true"
-          }
-          
-      - name: Increment Version and Import Solution to QA
-        if: steps.check_qa.outputs.found == 'true'
-        shell: pwsh
-        run: |
-          $version = Get-SolutionVersion -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionName '${{ inputs.solution_name }}'
-          # Increment version here
-          $new_version = ($version -split '\.') | ForEach-Object { [int]$_ } | ForEach-Object { $_ + 1 -join '.' }
-          Write-Host "New version: $new_version"
-          Import-Solution -EnvironmentUrl '${{ inputs.QA_ENVIRONMENT_URL }}' -ClientId '${{ inputs.CLIENT_ID }}' -ClientSecret '${{ secrets.envSecret }}' -TenantId '${{ inputs.TENANT_ID }}' -SolutionFile '${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip' -Version $new_version -ForceOverwrite -PublishChanges
+      - name: Import solution to QA environment
+        uses: microsoft/powerplatform-actions/import-solution@v0
+        with:
+          environment-url: ${{ inputs.QA_ENVIRONMENT_URL }}
+          app-id: ${{ inputs.CLIENT_ID }}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{ inputs.TENANT_ID }}
+          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
+          force-overwrite: true
+          publish-changes: true
+
+      - name: Import solution to UAT environment
+        uses: microsoft/powerplatform-actions/import-solution@v0
+        with:  
+          environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
+          app-id: ${{ inputs.CLIENT_ID }}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{ inputs.TENANT_ID }}
+          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
+          force-overwrite: true
+          publish-changes: true
+
+  release-to-prod:
+    needs: [release-to-environments]
+    runs-on: windows-latest
+    environment:
+      name: Production
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Fetch the ready to ship solution from GH artifact store
+        uses: actions/download-artifact@v2
+        with:
+          name: managedSolutions
+          path: ${{ inputs.solution_release_folder }}
+
+      - name: Import solution to Production environment
+        uses: microsoft/powerplatform-actions/import-solution@v0
+        with:
+          environment-url: ${{ inputs.PRODUCTION_ENVIRONMENT_URL }}
+          app-id: ${{ inputs.CLIENT_ID }}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{ inputs.TENANT_ID }}
+          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
+          force-overwrite: true
+          publish-changes: true

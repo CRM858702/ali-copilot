@@ -33,10 +33,10 @@ on:
         description: 'QA environment URL.'
         type: string
         required: true
-      UAT_ENVIRONMENT_URL:
-        description: 'UAT environment URL.'
-        type: string
-        required: true
+     # UAT_ENVIRONMENT_URL:
+      #  description: 'UAT environment URL.'
+     #   type: string
+      #  required: true
       PRODUCTION_ENVIRONMENT_URL: 
         description: 'Production environment URL.'
         type: string

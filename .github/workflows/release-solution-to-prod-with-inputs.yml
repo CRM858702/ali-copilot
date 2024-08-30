@@ -108,16 +108,26 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_release_folder }}
           
-      - name: Import solution as unmanaged to DvM
+      
+      - name: Import solution to DvM environment as holding
         uses: microsoft/powerplatform-actions/import-solution@v0
         with:
-          environment-url: ${{inputs.DVM_ENVIRONMENT_URL}}
-          app-id: ${{inputs.CLIENT_ID}}
+          environment-url: ${{ inputs.DVM_ENVIRONMENT_URL }}
+          app-id: ${{ inputs.CLIENT_ID }}
           client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{inputs.TENANT_ID}}
-          solution-file: ${{ inputs.solution_outbound_folder}}/${{ inputs.solution_name }}.zip
+          tenant-id: ${{ inputs.TENANT_ID }}
+          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
+          import-as-holding: true
           force-overwrite: true
-          publish-changes: true
+
+      - name: Upgrade solution in QA environment
+        uses: microsoft/powerplatform-actions/upgrade-solution@v0
+        with:
+          environment-url: ${{ inputs.DVM_ENVIRONMENT_URL }}
+          app-id: ${{ inputs.CLIENT_ID }}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{ inputs.TENANT_ID }}
+          solution-name: ${{ inputs.solution_name }}
      
 
   release-to-QA:

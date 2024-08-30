@@ -26,7 +26,7 @@ on:
         type: string
         required: true 
       DVM_ENVIRONMENT_URL:
-        description: 'Build environment URL.'
+        description: 'DvM environment URL.'
         type: string
         required: true
       QA_ENVIRONMENT_URL:

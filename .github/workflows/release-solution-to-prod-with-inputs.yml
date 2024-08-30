@@ -72,16 +72,7 @@ jobs:
           solution-file: ${{ inputs.solution_outbound_folder }}${{ inputs.solution_name }}.zip
           solution-type: Unmanaged    
           
-      - name: Import solution as unmanaged to DvM
-        uses: microsoft/powerplatform-actions/import-solution@v0
-        with:
-          environment-url: ${{inputs.DVM_ENVIRONMENT_URL}}
-          app-id: ${{inputs.CLIENT_ID}}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{inputs.TENANT_ID}}
-          solution-file: ${{ inputs.solution_outbound_folder}}/${{ inputs.solution_name }}.zip
-          force-overwrite: true
-          publish-changes: true
+      
         
       - name: Export solution as managed
         uses: microsoft/powerplatform-actions/export-solution@v0
@@ -100,7 +91,7 @@ jobs:
           name: managedSolutions
           path: ${{ inputs.solution_shipping_folder }}/
 
-  release-to-QA:
+  release-to-DvM:
     needs: [convert-to-managed]
     runs-on: windows-latest
     env:
@@ -116,7 +107,37 @@ jobs:
         with:
           name: managedSolutions
           path: ${{ inputs.solution_release_folder }}
+          
+      - name: Import solution as unmanaged to DvM
+        uses: microsoft/powerplatform-actions/import-solution@v0
+        with:
+          environment-url: ${{inputs.DVM_ENVIRONMENT_URL}}
+          app-id: ${{inputs.CLIENT_ID}}
+          client-secret: ${{ secrets.envSecret }}
+          tenant-id: ${{inputs.TENANT_ID}}
+          solution-file: ${{ inputs.solution_outbound_folder}}/${{ inputs.solution_name }}.zip
+          force-overwrite: true
+          publish-changes: true
+     
 
+  release-to-QA:
+    needs: [release-to-DvM]
+    runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Fetch the ready to ship solution from GH artifact store
+        uses: actions/download-artifact@v2
+        with:
+          name: managedSolutions
+          path: ${{ inputs.solution_release_folder }}
+      
+          
       - name: Import solution to QA environment as holding
         uses: microsoft/powerplatform-actions/import-solution@v0
         with:
@@ -137,25 +158,25 @@ jobs:
           tenant-id: ${{ inputs.TENANT_ID }}
           solution-name: ${{ inputs.solution_name }}
           
-      - name: Import solution to UAT environment as holding
-        uses: microsoft/powerplatform-actions/import-solution@v0
-        with:  
-          environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
-          app-id: ${{ inputs.CLIENT_ID }}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{ inputs.TENANT_ID }}
-          solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
-          import-as-holding: true
-          force-overwrite: true
+     # - name: Import solution to UAT environment as holding
+     #   uses: microsoft/powerplatform-actions/import-solution@v0
+      #  with:  
+     #     environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
+     #     app-id: ${{ inputs.CLIENT_ID }}
+     #     client-secret: ${{ secrets.envSecret }}
+      #    tenant-id: ${{ inputs.TENANT_ID }}
+      #    solution-file: ${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip
+      #    import-as-holding: true
+     #     force-overwrite: true
 
-      - name: Upgrade solution in UAT environment
-        uses: microsoft/powerplatform-actions/upgrade-solution@v0
-        with:
-          environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
-          app-id: ${{ inputs.CLIENT_ID }}
-          client-secret: ${{ secrets.envSecret }}
-          tenant-id: ${{ inputs.TENANT_ID }}
-          solution-name: ${{ inputs.solution_name }}
+     # - name: Upgrade solution in UAT environment
+    #    uses: microsoft/powerplatform-actions/upgrade-solution@v0
+      #  with:
+     #     environment-url: ${{ inputs.UAT_ENVIRONMENT_URL }}
+     #     app-id: ${{ inputs.CLIENT_ID }}
+      #    client-secret: ${{ secrets.envSecret }}
+      #    tenant-id: ${{ inputs.TENANT_ID }}
+      #    solution-name: ${{ inputs.solution_name }}
 
   release-to-prod:
     needs: [release-to-QA]
